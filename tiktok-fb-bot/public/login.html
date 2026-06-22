@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sign in · TikTok → Facebook</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="app app--centered">
+      <div class="card login-card">
+        <header class="header">
+          <div class="header__brand">
+            <div class="header__logo" aria-hidden="true">TF</div>
+            <div>
+              <h1 class="header__title">Sign in</h1>
+              <p class="header__subtitle">TikTok → Facebook automation</p>
+            </div>
+          </div>
+        </header>
+
+        <p style="margin: 0 0 20px; color: var(--text-secondary); font-size: 14px;">
+          Use the credentials configured in your environment variables.
+        </p>
+
+        <div class="field">
+          <label for="username">Username</label>
+          <input id="username" type="text" autocomplete="username" placeholder="admin" />
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+        </div>
+
+        <button id="loginBtn" class="btn btn--primary btn--block" type="button">Continue</button>
+        <p id="error" class="message message--error" role="alert"></p>
+      </div>
+    </div>
+
+    <script>
+      const errorBox = document.getElementById('error');
+
+      document.getElementById('password').addEventListener('keydown', (event) => {
+        if (event.key === 'Enter') {
+          document.getElementById('loginBtn').click();
+        }
+      });
+
+      document.getElementById('loginBtn').addEventListener('click', async () => {
+        errorBox.textContent = '';
+        const username = document.getElementById('username').value.trim();
+        const password = document.getElementById('password').value.trim();
+
+        const response = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+        });
+
+        const data = await response.json();
+        if (data.ok) {
+          window.location.href = '/';
+        } else {
+          errorBox.textContent = data.error || 'Invalid credentials.';
+        }
+      });
+    </script>
+  </body>
+</html>

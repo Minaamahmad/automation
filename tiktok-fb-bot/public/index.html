@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Dashboard · TikTok → Facebook</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="/app.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="header__brand">
+          <div class="header__logo" aria-hidden="true">TF</div>
+          <div>
+            <h1 class="header__title">TikTok → Facebook</h1>
+            <p class="header__subtitle">Automation dashboard</p>
+          </div>
+        </div>
+        <button id="logoutBtn" class="btn btn--ghost" type="button">Sign out</button>
+      </header>
+
+      <div class="stats">
+        <div class="stat">
+          <div class="stat__label">Schedule</div>
+          <div class="stat__value" id="statSchedule">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat__label">Pending</div>
+          <div class="stat__value stat__value--accent" id="statPending">—</div>
+        </div>
+        <div class="stat">
+          <div class="stat__label">Status</div>
+          <div class="stat__value" id="statStatus">Active</div>
+        </div>
+      </div>
+
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title">Add to queue</h2>
+        </div>
+        <div class="card__body">
+          <p>Paste one TikTok URL per line. Optional hashtags after each URL are used as Facebook captions.</p>
+          <div class="field">
+            <label for="linksInput">TikTok URLs</label>
+            <textarea
+              id="linksInput"
+              placeholder="https://www.tiktok.com/@user/video/123456789 #funny #viral"
+            ></textarea>
+          </div>
+          <div class="btn-row">
+            <button id="addBtn" class="btn btn--primary" type="button">Add &amp; process</button>
+            <button id="runBtn" class="btn btn--secondary" type="button">Run check now</button>
+          </div>
+          <p id="message" class="message message--info" role="status"></p>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title">Queue</h2>
+        </div>
+        <div id="queueList" class="list"></div>
+      </section>
+
+      <section class="card">
+        <div class="card__header">
+          <h2 class="card__title">Recent activity</h2>
+        </div>
+        <div id="logsList" class="list"></div>
+      </section>
+    </div>
+
+    <script>
+      const messageBox = document.getElementById('message');
+      const logsList = document.getElementById('logsList');
+      const statSchedule = document.getElementById('statSchedule');
+      const statPending = document.getElementById('statPending');
+
+      async function api(path, options = {}) {
+        const response = await fetch(path, {
+          method: options.method || 'GET',
+          headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
+          body: options.body ? JSON.stringify(options.body) : undefined,
+        });
+
+        if (response.status === 401) {
+          window.location.href = '/login.html';
+          throw new Error('Unauthorized');
+        }
+
+        return response.json();
+      }
+
+      function setMessage(text, type = 'info') {
+        messageBox.textContent = text;
+        messageBox.className = `message message--${type}`;
+      }
+
+      function logClass(line) {
+        if (line.includes('SUCCESS')) return 'log-entry--success';
+        if (line.includes('FAILED')) return 'log-entry--failed';
+        return 'log-entry--info';
+      }
+
+      function escapeHtml(text) {
+        return String(text)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      async function loadStatus() {
+        const data = await api('/api/status');
+        statSchedule.textContent = data.schedule;
+        statPending.textContent = String(data.pending.length);
+
+        const queueEl = document.getElementById('queueList');
+        queueEl.innerHTML = data.pending.length
+          ? data.pending
+              .map(
+                (item) =>
+                  `<div class="list-item">
+                    <div class="list-item__url">${escapeHtml(item.url)}</div>
+                    ${
+                      item.tags.length
+                        ? `<div class="list-item__tags">${escapeHtml(item.tags.join(' '))}</div>`
+                        : ''
+                    }
+                  </div>`
+              )
+              .join('')
+          : '<div class="list-item list-item--empty">No pending items</div>';
+
+        logsList.innerHTML = data.logs.length
+          ? data.logs
+              .map(
+                (line) =>
+                  `<div class="log-entry ${logClass(line)}"><span class="log-entry__text">${escapeHtml(line)}</span></div>`
+              )
+              .join('')
+          : '<div class="list-item list-item--empty">No activity yet</div>';
+      }
+
+      document.getElementById('addBtn').addEventListener('click', async () => {
+        const links = document.getElementById('linksInput').value.trim();
+        if (!links) {
+          setMessage('Add at least one TikTok URL.', 'error');
+          return;
+        }
+
+        const result = await api('/api/queue/add', { method: 'POST', body: { links } });
+        if (result.ok) {
+          setMessage(`Added ${result.added || 0} link(s) to the queue.`, 'success');
+          document.getElementById('linksInput').value = '';
+          await loadStatus();
+        } else {
+          setMessage(result.error || 'Failed to add links.', 'error');
+        }
+      });
+
+      document.getElementById('runBtn').addEventListener('click', async () => {
+        setMessage('Starting manual check…', 'info');
+        const result = await api('/api/queue/process', { method: 'POST' });
+        if (result.ok) {
+          setMessage('Check started. Activity will appear below.', 'success');
+          await loadStatus();
+        } else {
+          setMessage(result.error || 'Manual check failed.', 'error');
+        }
+      });
+
+      document.getElementById('logoutBtn').addEventListener('click', async () => {
+        await fetch('/api/auth/logout', { method: 'POST' });
+        window.location.href = '/login.html';
+      });
+
+      loadStatus();
+      setInterval(loadStatus, 10000);
+    </script>
+  </body>
+</html>

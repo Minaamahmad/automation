@@ -1,0 +1,23 @@
+# Add TikTok URLs here, one per line
+# Format: https://www.tiktok.com/@user/video/123456 #tag1 #tag2
+# After processing, links will be marked with #done prefix
+#done https://www.tiktok.com/@rashid.ali.mallah/video/7597463146709650706?lang=en&q=FUNNY%20VIDEOS&t=1780410525912
+#done https://www.tiktok.com/@riftspecter/video/7592214054211472671?lang=en&q=unny%20fail&t=1780411028939
+#done https://www.tiktok.com/@moodbooster_35/video/7581447573567851798?lang=en&q=unny%20fail&t=1780411028939
+#done https://www.tiktok.com/@lovecat.0338/video/7517597168354528526?lang=en&q=unny%20fail&t=1780411028939
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #funny #viral
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646  #funny #viral #foryou
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #funny #viral
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #viral #funny #foryou #watch
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #viral #fail #notfunny
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #viral #foryou #fails
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #viral #fails #foryou
+#done https://www.tiktok.com/@kl.esr/video/7581412712761101598?q=unny%20fail&t=1780473442646 #viral #fails #facebook
+#done https://www.tiktok.com/@just.laugh72/video/7543405318915575070?q=unny%20fail&t=1780473442646 #viral #fails #foryou
+#done https://www.tiktok.com/@just.laugh72/video/7543405318915575070?q=unny%20fail&t=1780473442646 #fails
+#done https://www.tiktok.com/@just.laugh72/video/7543405318915575070?q=unny%20fail&t=1780473442646 #viral #fails
+#done https://www.tiktok.com/@just.laugh72/video/7543405318915575070?q=unny%20fail&t=1780473442646
+#done https://www.tiktok.com/@ttakkmdscbg/video/7195159168360172805?q=unny%20fail&t=1780473442646 #funny #viral #fails
+#done https://www.tiktok.com/@afvofficial/video/7254367273866136878?q=unny%20fail&t=1780473442646 #vial
+#done https://www.tiktok.com/@afvofficial/video/7254367273866136878?q=unny%20fail&t=1780473442646 #viral
+#done https://www.tiktok.com/@_mala_princeza_/video/6980255286330133765?q=unny%20fail&t=1780473442646 #viral #fails
