@@ -1,31 +1,44 @@
 const fs = require('fs');
 const path = require('path');
+const { getDefaultPageKey } = require('./pages');
 
 const QUEUE_FILE = path.join(__dirname, 'links.txt');
 
-/**
- * Parse URL and tags from a line
- * Format: https://url.com/video #tag1 #tag2
- * Returns { url, tags }
- */
 function parseUrlAndTags(line) {
   const parts = line.trim().split(/\s+/);
   const url = parts[0];
-  const tags = parts.slice(1).filter((p) => p.startsWith('#'));
+  const tags = parts.slice(1).filter((part) => part.startsWith('#'));
   return { url, tags };
 }
 
-/**
- * Read all lines from links.txt
- * Filter out blank lines and comments
- * Return next unprocessed URL with tags (not marked with #done)
- * Returns { url, tags } or null
- */
+function parseQueueLine(line) {
+  const trimmed = line.trim();
+  let pageKey = getDefaultPageKey();
+  let content = trimmed;
+
+  const pageMatch = trimmed.match(/^@([a-zA-Z0-9_-]+)\s+(.+)$/);
+  if (pageMatch) {
+    pageKey = pageMatch[1];
+    content = pageMatch[2];
+  }
+
+  const { url, tags } = parseUrlAndTags(content);
+  return { url, tags, pageKey };
+}
+
+function isQueueLine(line) {
+  const trimmed = line.trim();
+  return Boolean(trimmed) && !trimmed.startsWith('#');
+}
+
 function getNextUrl() {
   try {
     if (!fs.existsSync(QUEUE_FILE)) {
       console.log('Queue file not found. Creating links.txt...');
-      fs.writeFileSync(QUEUE_FILE, '# Add TikTok URLs here, one per line\n# Format: https://url.com/video #tag1 #tag2\n');
+      fs.writeFileSync(
+        QUEUE_FILE,
+        '# Add TikTok URLs here, one per line\n# Optional page prefix: @page2 https://url.com/video #tag1\n'
+      );
       return null;
     }
 
@@ -33,18 +46,13 @@ function getNextUrl() {
     const lines = content.split('\n');
 
     for (const line of lines) {
-      const trimmed = line.trim();
-
-      // Skip empty lines and comments
-      if (!trimmed || trimmed.startsWith('#')) {
+      if (!isQueueLine(line)) {
         continue;
       }
 
-      // Found an unprocessed line - parse it
-      return parseUrlAndTags(trimmed);
+      return parseQueueLine(line);
     }
 
-    // Queue is empty
     return null;
   } catch (error) {
     console.error('Error reading queue:', error);
@@ -52,34 +60,32 @@ function getNextUrl() {
   }
 }
 
-/**
- * Mark a URL as done by prefixing it with #done
- */
 function markAsDone(urlToMark) {
   try {
     const content = fs.readFileSync(QUEUE_FILE, 'utf-8');
-    let lines = content.split('\n');
+    const lines = content.split('\n');
 
-    // Find and replace the URL with #done version
-    lines = lines.map((line) => {
+    const updated = lines.map((line) => {
       const trimmed = line.trim();
-      // Check if this line starts with the URL (ignoring tags)
-      if (trimmed.startsWith(urlToMark)) {
+      if (!isQueueLine(line)) {
+        return line;
+      }
+
+      const parsed = parseQueueLine(trimmed);
+      if (parsed.url === urlToMark || trimmed.includes(urlToMark)) {
         return `#done ${line}`;
       }
+
       return line;
     });
 
-    fs.writeFileSync(QUEUE_FILE, lines.join('\n'), 'utf-8');
+    fs.writeFileSync(QUEUE_FILE, updated.join('\n'), 'utf-8');
     console.log(`Marked as done: ${urlToMark}`);
   } catch (error) {
     console.error('Error marking URL as done:', error);
   }
 }
 
-/**
- * Get all pending URLs (not yet processed)
- */
 function getPendingUrls() {
   try {
     if (!fs.existsSync(QUEUE_FILE)) {
@@ -87,25 +93,43 @@ function getPendingUrls() {
     }
 
     const content = fs.readFileSync(QUEUE_FILE, 'utf-8');
-    const lines = content.split('\n');
-
-    return lines
-      .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith('#'))
-      .map((line) => parseUrlAndTags(line));
+    return content
+      .split('\n')
+      .filter(isQueueLine)
+      .map((line) => parseQueueLine(line.trim()));
   } catch (error) {
     console.error('Error getting pending URLs:', error);
     return [];
   }
 }
 
-function appendLinks(input) {
+function normalizeTags(tagsInput) {
+  return String(tagsInput || '')
+    .split(/[\s,]+/)
+    .map((tag) => tag.trim())
+    .filter(Boolean)
+    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
+}
+
+function buildQueueLine(url, tagsInput = '', pageKey) {
+  const tags = normalizeTags(tagsInput);
+  const tagSuffix = tags.length ? ` ${tags.join(' ')}` : '';
+  const key = (pageKey || getDefaultPageKey()).trim();
+  return `@${key} ${url}${tagSuffix}`;
+}
+
+function appendLinks(input, tagsInput = '', pageKey) {
   try {
+    const selectedPageKey = (pageKey || getDefaultPageKey()).trim();
     const rawLines = String(input || '')
       .split(/\r?\n/)
       .map((line) => line.trim())
       .filter(Boolean)
-      .filter((line) => !line.startsWith('#'));
+      .filter((line) => !line.startsWith('#'))
+      .map((line) => {
+        const { url } = parseUrlAndTags(line);
+        return buildQueueLine(url, tagsInput, selectedPageKey);
+      });
 
     if (rawLines.length === 0) {
       return { added: 0 };
@@ -114,7 +138,7 @@ function appendLinks(input) {
     if (!fs.existsSync(QUEUE_FILE)) {
       fs.writeFileSync(
         QUEUE_FILE,
-        '# Add TikTok URLs here, one per line\n# Format: https://url.com/video #tag1 #tag2\n',
+        '# Add TikTok URLs here, one per line\n# Optional page prefix: @page2 https://url.com/video #tag1\n',
         'utf-8'
       );
     }
@@ -123,7 +147,7 @@ function appendLinks(input) {
     const existingLines = currentContent
       .split('\n')
       .map((line) => line.trim())
-      .filter((line) => line && !line.startsWith('#'));
+      .filter(isQueueLine);
 
     const uniqueLines = rawLines.filter((line) => !existingLines.includes(line));
 
@@ -134,7 +158,7 @@ function appendLinks(input) {
     const newContent = `${currentContent}${currentContent.endsWith('\n') ? '' : '\n'}${uniqueLines.join('\n')}\n`;
     fs.writeFileSync(QUEUE_FILE, newContent, 'utf-8');
 
-    return { added: uniqueLines.length };
+    return { added: uniqueLines.length, pageKey: selectedPageKey };
   } catch (error) {
     console.error('Error appending links:', error);
     return { added: 0, error: error.message };
@@ -146,4 +170,6 @@ module.exports = {
   markAsDone,
   getPendingUrls,
   appendLinks,
+  parseQueueLine,
+  buildQueueLine,
 };

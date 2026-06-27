@@ -3,70 +3,142 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Sign in · TikTok → Facebook</title>
+    <title>Sign in · AutoPost Bridge</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/app.css" />
   </head>
-  <body>
-    <div class="app app--centered">
-      <div class="card login-card">
-        <header class="header">
-          <div class="header__brand">
-            <div class="header__logo" aria-hidden="true">TF</div>
-            <div>
-              <h1 class="header__title">Sign in</h1>
-              <p class="header__subtitle">TikTok → Facebook automation</p>
-            </div>
-          </div>
-        </header>
+  <body class="page-login">
+    <div class="login-shell">
+      <aside class="login-hero">
+        <div class="login-hero__glow"></div>
+        <div class="login-hero__glow login-hero__glow--blue"></div>
 
-        <p style="margin: 0 0 20px; color: var(--text-secondary); font-size: 14px;">
-          Use the credentials configured in your environment variables.
+        <div class="brand-mark" aria-hidden="true">AB</div>
+        <h1 class="login-hero__title">Your <span>video pipeline</span> on autopilot</h1>
+        <p class="login-hero__text">
+          Download TikTok clips without watermark and publish them straight to your Facebook Page — hands free.
         </p>
 
-        <div class="field">
-          <label for="username">Username</label>
-          <input id="username" type="text" autocomplete="username" placeholder="admin" />
+        <div class="pipeline" aria-hidden="true">
+          <span class="pipeline__node pipeline__node--tiktok">TikTok</span>
+          <span class="pipeline__arrow">→</span>
+          <span class="pipeline__node">Download</span>
+          <span class="pipeline__arrow">→</span>
+          <span class="pipeline__node pipeline__node--fb">Facebook</span>
         </div>
+      </aside>
 
-        <div class="field">
-          <label for="password">Password</label>
-          <input id="password" type="password" autocomplete="current-password" placeholder="••••••••" />
+      <main class="login-panel">
+        <div class="login-card">
+          <p class="login-card__eyebrow">Secure access</p>
+          <h2 class="login-card__title">Welcome back</h2>
+          <p class="login-card__hint">
+            Press <span class="login-card__kbd">Enter</span> to move between fields and sign in.
+          </p>
+
+          <form id="loginForm" novalidate>
+            <div class="field">
+              <label for="username">Username</label>
+              <input
+                id="username"
+                type="text"
+                autocomplete="username"
+                placeholder="admin"
+                autofocus
+                required
+              />
+            </div>
+
+            <div class="field">
+              <label for="password">Password</label>
+              <input
+                id="password"
+                type="password"
+                autocomplete="current-password"
+                placeholder="Your password"
+                required
+              />
+            </div>
+
+            <button id="loginBtn" class="btn btn--primary btn--block" type="submit">
+              Sign in to dashboard
+            </button>
+            <p id="error" class="message message--error" role="alert"></p>
+          </form>
         </div>
-
-        <button id="loginBtn" class="btn btn--primary btn--block" type="button">Continue</button>
-        <p id="error" class="message message--error" role="alert"></p>
-      </div>
+      </main>
     </div>
 
     <script>
+      const form = document.getElementById('loginForm');
+      const usernameInput = document.getElementById('username');
+      const passwordInput = document.getElementById('password');
+      const loginBtn = document.getElementById('loginBtn');
       const errorBox = document.getElementById('error');
 
-      document.getElementById('password').addEventListener('keydown', (event) => {
+      usernameInput.addEventListener('keydown', (event) => {
         if (event.key === 'Enter') {
-          document.getElementById('loginBtn').click();
+          event.preventDefault();
+          passwordInput.focus();
         }
       });
 
-      document.getElementById('loginBtn').addEventListener('click', async () => {
+      async function attemptLogin() {
         errorBox.textContent = '';
-        const username = document.getElementById('username').value.trim();
-        const password = document.getElementById('password').value.trim();
+        const username = usernameInput.value.trim();
+        const password = passwordInput.value;
 
-        const response = await fetch('/api/auth/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ username, password }),
-        });
-
-        const data = await response.json();
-        if (data.ok) {
-          window.location.href = '/';
-        } else {
-          errorBox.textContent = data.error || 'Invalid credentials.';
+        if (!username) {
+          errorBox.textContent = 'Enter your username.';
+          usernameInput.focus();
+          return;
         }
+
+        if (!password) {
+          errorBox.textContent = 'Enter your password.';
+          passwordInput.focus();
+          return;
+        }
+
+        loginBtn.disabled = true;
+        loginBtn.textContent = 'Signing in…';
+
+        try {
+          const response = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username, password }),
+          });
+
+          const data = await response.json();
+          if (data.ok) {
+            window.location.href = '/';
+            return;
+          }
+
+          errorBox.textContent = data.error || 'Invalid credentials.';
+          passwordInput.focus();
+          passwordInput.select();
+        } catch {
+          errorBox.textContent = 'Could not reach the server. Try again.';
+        } finally {
+          loginBtn.disabled = false;
+          loginBtn.textContent = 'Sign in to dashboard';
+        }
+      }
+
+      form.addEventListener('submit', (event) => {
+        event.preventDefault();
+        attemptLogin();
+      });
+
+      window.addEventListener('load', () => {
+        usernameInput.focus();
       });
     </script>
   </body>

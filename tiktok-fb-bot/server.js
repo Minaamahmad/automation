@@ -5,12 +5,14 @@ const session = require('express-session');
 const path = require('path');
 const queue = require('./queue');
 const logger = require('./logger');
+const status = require('./status');
 const { validateEnvironment, startScheduler, processQueue } = require('./index');
+const { getPageSummaries } = require('./pages');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const AUTH_USERNAME = (process.env.AUTH_USERNAME || 'admin').trim();
-const AUTH_PASSWORD = (process.env.AUTH_PASSWORD || 'change-me').trim();
+const AUTH_PASSWORD = (process.env.AUTH_PASSWORD || 'password').trim();
 const SESSION_SECRET = (process.env.SESSION_SECRET || 'tiktok-fb-bot-session-secret').trim();
 
 app.use(express.json());
@@ -69,12 +71,20 @@ app.post('/api/auth/logout', (req, res) => {
 app.use('/api', requireAuth);
 
 app.get('/api/status', (req, res) => {
+  const pending = queue.getPendingUrls();
   res.json({
     ok: true,
     schedule: process.env.CRON_SCHEDULE || '0 * * * *',
-    pending: queue.getPendingUrls(),
-    logs: logger.getLogs().slice(-10),
+    pages: getPageSummaries(),
+    pending,
+    pendingCount: pending.length,
+    job: status.getSnapshot(),
+    activity: logger.getStructuredLogs(15),
   });
+});
+
+app.get('/api/pages', (req, res) => {
+  res.json({ ok: true, pages: getPageSummaries() });
 });
 
 app.get('/api/queue', (req, res) => {
@@ -83,8 +93,10 @@ app.get('/api/queue', (req, res) => {
 
 app.post('/api/queue/add', async (req, res) => {
   try {
-    const links = req.body.links || '';
-    const result = queue.appendLinks(links);
+    const urls = req.body.urls || req.body.links || '';
+    const tags = req.body.tags || '';
+    const page = req.body.page || 'default';
+    const result = queue.appendLinks(urls, tags, page);
 
     if (result.added > 0) {
       await processQueue();

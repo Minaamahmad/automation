@@ -13,9 +13,10 @@ function getTimestamp() {
 /**
  * Log a successful upload
  */
-function logSuccess(tiktokUrl, fbVideoId) {
+function logSuccess(tiktokUrl, fbVideoId, pageName = null) {
   const timestamp = getTimestamp();
-  const entry = `[${timestamp}] SUCCESS | ${tiktokUrl} | FB Video ID: ${fbVideoId}\n`;
+  const pagePart = pageName ? ` | Page: ${pageName}` : '';
+  const entry = `[${timestamp}] SUCCESS | ${tiktokUrl}${pagePart} | FB Video ID: ${fbVideoId}\n`;
 
   try {
     fs.appendFileSync(LOGS_FILE, entry, 'utf-8');
@@ -72,9 +73,56 @@ function getLogs() {
   }
 }
 
+function parseLogLine(line) {
+  const match = line.match(/^\[([^\]]+)\]\s+(SUCCESS|FAILED|INFO)\s+\|\s+(.+)$/);
+  if (!match) {
+    return { time: null, type: 'info', url: null, message: line };
+  }
+
+  const [, time, type, rest] = match;
+  const normalizedType = type.toLowerCase();
+
+  if (normalizedType === 'success') {
+    const parts = rest.match(/^(.+?)(?:\s+\|\s+Page:\s+([^|]+?))?\s+\|\s+FB Video ID:\s*(.+)$/);
+    const pageName = parts?.[2]?.trim();
+    const fbId = parts?.[3]?.trim();
+    return {
+      time,
+      type: 'success',
+      url: parts?.[1]?.trim() || null,
+      message: pageName
+        ? `Posted to ${pageName} · FB ID ${fbId}`
+        : fbId
+          ? `Posted · FB ID ${fbId}`
+          : rest,
+    };
+  }
+
+  if (normalizedType === 'failed') {
+    const parts = rest.match(/^(.+?)\s+\|\s+Reason:\s*(.+)$/s);
+    return {
+      time,
+      type: 'failed',
+      url: parts?.[1]?.trim() || null,
+      message: parts?.[2]?.trim() || rest,
+    };
+  }
+
+  return { time, type: 'info', url: null, message: rest.trim() };
+}
+
+function getStructuredLogs(limit = 20) {
+  return getLogs()
+    .slice(-limit)
+    .reverse()
+    .map(parseLogLine);
+}
+
 module.exports = {
   logSuccess,
   logFailure,
   logInfo,
   getLogs,
+  parseLogLine,
+  getStructuredLogs,
 };

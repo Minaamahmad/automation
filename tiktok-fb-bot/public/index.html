@@ -3,52 +3,103 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Dashboard · TikTok → Facebook</title>
+    <title>Dashboard · AutoPost Bridge</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&family=Outfit:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet"
+    />
     <link rel="stylesheet" href="/app.css" />
   </head>
-  <body>
+  <body class="page-dashboard">
     <div class="app">
       <header class="header">
         <div class="header__brand">
-          <div class="header__logo" aria-hidden="true">TF</div>
+          <div class="header__logo" aria-hidden="true">AB</div>
           <div>
-            <h1 class="header__title">TikTok → Facebook</h1>
-            <p class="header__subtitle">Automation dashboard</p>
+            <h1 class="header__title">AutoPost Bridge</h1>
+            <p class="header__subtitle">TikTok → Facebook automation</p>
           </div>
+        </div>
+        <div class="header__pill">
+          <span id="statPending">0 pending</span>
+          <span>·</span>
+          <span id="statSchedule">—</span>
         </div>
         <button id="logoutBtn" class="btn btn--ghost" type="button">Sign out</button>
       </header>
 
-      <div class="stats">
-        <div class="stat">
-          <div class="stat__label">Schedule</div>
-          <div class="stat__value" id="statSchedule">—</div>
+      <section class="live-status" id="liveStatus" aria-live="polite">
+        <div class="live-status__top">
+          <div class="live-status__indicator">
+            <span class="live-status__dot" id="statusDot"></span>
+            <span class="live-status__label" id="statusLabel">Idle</span>
+          </div>
+          <div class="live-status__meta">
+            <span class="live-status__chip" id="statusChip">Standing by</span>
+          </div>
         </div>
-        <div class="stat">
-          <div class="stat__label">Pending</div>
-          <div class="stat__value stat__value--accent" id="statPending">—</div>
-        </div>
-        <div class="stat">
-          <div class="stat__label">Status</div>
-          <div class="stat__value" id="statStatus">Active</div>
-        </div>
-      </div>
 
-      <section class="card">
+        <p class="live-status__message" id="statusMessage">Waiting for the next video in queue.</p>
+
+        <div class="steps" id="stepsBar">
+          <div class="step" data-step="1">
+            <div class="step__icon">↓</div>
+            <span class="step__label">Download</span>
+          </div>
+          <div class="step__line"></div>
+          <div class="step" data-step="2">
+            <div class="step__icon">↑</div>
+            <span class="step__label">Upload</span>
+          </div>
+          <div class="step__line"></div>
+          <div class="step" data-step="3">
+            <div class="step__icon">✓</div>
+            <span class="step__label">Cleanup</span>
+          </div>
+        </div>
+
+        <div class="current-job" id="currentJob" hidden>
+          <div class="current-job__label">Now processing</div>
+          <div class="current-job__page" id="currentPage" hidden></div>
+          <div class="current-job__url" id="currentUrl"></div>
+          <div class="current-job__tags" id="currentTags" hidden></div>
+        </div>
+
+        <div class="last-result" id="lastResult" hidden>
+          <span class="badge" id="lastResultBadge"></span>
+          <span class="last-result__text" id="lastResultText"></span>
+        </div>
+      </section>
+
+      <section class="card card--glass">
         <div class="card__header">
           <h2 class="card__title">Add to queue</h2>
         </div>
         <div class="card__body">
-          <p>Paste one TikTok URL per line. Optional hashtags after each URL are used as Facebook captions.</p>
+          <p>Add multiple TikTok links at once. Choose which Facebook Page to post to.</p>
           <div class="field">
-            <label for="linksInput">TikTok URLs</label>
-            <textarea
-              id="linksInput"
-              placeholder="https://www.tiktok.com/@user/video/123456789 #funny #viral"
-            ></textarea>
+            <label for="pageSelect">Facebook Page</label>
+            <select id="pageSelect"></select>
+            <p class="field__selected" id="pageSelectedHint">Posting to —</p>
+          </div>
+          <div class="form-split">
+            <div class="field">
+              <label for="urlsInput">TikTok URLs <span class="field__hint">one per line</span></label>
+              <textarea
+                id="urlsInput"
+                placeholder="https://www.tiktok.com/@user/video/123456789&#10;https://www.tiktok.com/@user/video/987654321"
+              ></textarea>
+            </div>
+            <div class="field">
+              <label for="tagsInput">Hashtags <span class="field__hint">space or comma separated</span></label>
+              <input
+                id="tagsInput"
+                type="text"
+                placeholder="#funny #viral #foryou"
+              />
+            </div>
           </div>
           <div class="btn-row">
             <button id="addBtn" class="btn btn--primary" type="button">Add &amp; process</button>
@@ -58,19 +109,22 @@
         </div>
       </section>
 
-      <section class="card">
-        <div class="card__header">
-          <h2 class="card__title">Queue</h2>
-        </div>
-        <div id="queueList" class="list"></div>
-      </section>
+      <div class="dashboard-grid">
+        <section class="card card--glass">
+          <div class="card__header">
+            <h2 class="card__title">Queue</h2>
+            <span class="card__badge" id="queueCount">0</span>
+          </div>
+          <div id="queueList" class="list"></div>
+        </section>
 
-      <section class="card">
-        <div class="card__header">
-          <h2 class="card__title">Recent activity</h2>
-        </div>
-        <div id="logsList" class="list"></div>
-      </section>
+        <section class="card card--glass">
+          <div class="card__header">
+            <h2 class="card__title">Recent activity</h2>
+          </div>
+          <div id="logsList" class="activity-list"></div>
+        </section>
+      </div>
     </div>
 
     <script>
@@ -78,6 +132,61 @@
       const logsList = document.getElementById('logsList');
       const statSchedule = document.getElementById('statSchedule');
       const statPending = document.getElementById('statPending');
+      const statusLabel = document.getElementById('statusLabel');
+      const statusMessage = document.getElementById('statusMessage');
+      const statusDot = document.getElementById('statusDot');
+      const statusChip = document.getElementById('statusChip');
+      const liveStatus = document.getElementById('liveStatus');
+      const currentJob = document.getElementById('currentJob');
+      const currentUrl = document.getElementById('currentUrl');
+      const currentPage = document.getElementById('currentPage');
+      const currentTags = document.getElementById('currentTags');
+      const pageSelect = document.getElementById('pageSelect');
+      const pageSelectedHint = document.getElementById('pageSelectedHint');
+      const lastResult = document.getElementById('lastResult');
+      const lastResultBadge = document.getElementById('lastResultBadge');
+      const lastResultText = document.getElementById('lastResultText');
+      const queueCount = document.getElementById('queueCount');
+      const steps = document.querySelectorAll('.step');
+
+      let pollTimer = null;
+      let isBusy = false;
+      let pages = [];
+
+      function renderPageOptions(pageList) {
+        pages = pageList || [];
+        const savedPage = localStorage.getItem('selectedPageKey');
+        pageSelect.innerHTML = pages
+          .map(
+            (page) =>
+              `<option value="${escapeHtml(page.key)}">${escapeHtml(page.name)}</option>`
+          )
+          .join('');
+
+        if (savedPage && pages.some((page) => page.key === savedPage)) {
+          pageSelect.value = savedPage;
+        }
+
+        updatePageHint();
+      }
+
+      function updatePageHint() {
+        const selected = pages.find((page) => page.key === pageSelect.value);
+        pageSelectedHint.textContent = selected
+          ? `Videos will post to: ${selected.name}`
+          : 'Select a Facebook Page';
+        pageSelectedHint.classList.toggle('field__selected--active', Boolean(selected));
+      }
+
+      pageSelect.addEventListener('change', () => {
+        localStorage.setItem('selectedPageKey', pageSelect.value);
+        updatePageHint();
+      });
+
+      function pageLabel(pageKey) {
+        const page = pages.find((entry) => entry.key === pageKey);
+        return page ? page.name : pageKey;
+      }
 
       async function api(path, options = {}) {
         const response = await fetch(path, {
@@ -99,12 +208,6 @@
         messageBox.className = `message message--${type}`;
       }
 
-      function logClass(line) {
-        if (line.includes('SUCCESS')) return 'log-entry--success';
-        if (line.includes('FAILED')) return 'log-entry--failed';
-        return 'log-entry--info';
-      }
-
       function escapeHtml(text) {
         return String(text)
           .replace(/&/g, '&amp;')
@@ -113,63 +216,209 @@
           .replace(/"/g, '&quot;');
       }
 
+      function shortUrl(url) {
+        if (!url) return '';
+        try {
+          const parsed = new URL(url);
+          return parsed.pathname.length > 40
+            ? parsed.pathname.slice(0, 40) + '…'
+            : parsed.pathname;
+        } catch {
+          return url.length > 48 ? url.slice(0, 48) + '…' : url;
+        }
+      }
+
+      function formatSchedule(cron) {
+        const map = {
+          '0 * * * *': 'Every hour',
+          '*/30 * * * *': 'Every 30 min',
+          '0 0 * * *': 'Daily at midnight',
+        };
+        return map[cron] ? map[cron] : cron;
+      }
+
+      function badgeClass(type) {
+        if (type === 'success') return 'badge--success';
+        if (type === 'failed') return 'badge--failed';
+        return 'badge--info';
+      }
+
+      function badgeLabel(type) {
+        if (type === 'success') return 'Posted';
+        if (type === 'failed') return 'Failed';
+        return 'Info';
+      }
+
+      function updateSteps(step) {
+        steps.forEach((el) => {
+          const stepNum = Number(el.dataset.step);
+          el.classList.remove('step--active', 'step--done');
+          if (!isBusy) return;
+          if (stepNum < step) el.classList.add('step--done');
+          if (stepNum === step) el.classList.add('step--active');
+        });
+      }
+
+      function renderJob(job, pendingCount = 0) {
+        isBusy = job.active;
+        liveStatus.classList.toggle('live-status--busy', job.active);
+
+        if (job.active) {
+          statusLabel.textContent = job.phaseLabel;
+          statusMessage.textContent = job.message || 'Working…';
+          statusDot.className = 'live-status__dot live-status__dot--busy';
+          statusChip.textContent = 'Live';
+          currentJob.hidden = false;
+          currentUrl.textContent = job.url || '';
+          if (job.pageName) {
+            currentPage.hidden = false;
+            currentPage.textContent = `→ ${job.pageName}`;
+          } else {
+            currentPage.hidden = true;
+          }
+          if (job.tags && job.tags.length) {
+            currentTags.hidden = false;
+            currentTags.textContent = job.tags.join(' ');
+          } else {
+            currentTags.hidden = true;
+          }
+          lastResult.hidden = true;
+          updateSteps(job.step || 1);
+        } else {
+          statusLabel.textContent = 'Idle';
+          statusDot.className = 'live-status__dot';
+          statusChip.textContent = pendingCount > 0 ? `${pendingCount} in queue` : 'Standing by';
+          currentJob.hidden = true;
+          updateSteps(0);
+
+          if (job.lastJob) {
+            const { result, message, url } = job.lastJob;
+            lastResult.hidden = false;
+            lastResultBadge.className = `badge ${badgeClass(result)}`;
+            lastResultBadge.textContent = badgeLabel(result);
+            lastResultText.textContent = message || shortUrl(url);
+            statusMessage.textContent =
+              result === 'success'
+                ? 'Last video posted successfully. Waiting for the next run.'
+                : 'Last job failed. Check activity for details.';
+          } else {
+            lastResult.hidden = true;
+            statusMessage.textContent =
+              pendingCount > 0
+                ? 'Ready to process the next video in queue.'
+                : 'Add TikTok links below to get started.';
+          }
+        }
+      }
+
+      function schedulePoll(active) {
+        clearInterval(pollTimer);
+        pollTimer = setInterval(loadStatus, active ? 2000 : 8000);
+      }
+
       async function loadStatus() {
         const data = await api('/api/status');
-        statSchedule.textContent = data.schedule;
-        statPending.textContent = String(data.pending.length);
+        renderPageOptions(data.pages || []);
+        statSchedule.textContent = formatSchedule(data.schedule);
+        statPending.textContent = `${data.pendingCount} pending`;
+        queueCount.textContent = String(data.pendingCount);
+        renderJob(data.job, data.pendingCount);
 
         const queueEl = document.getElementById('queueList');
         queueEl.innerHTML = data.pending.length
           ? data.pending
               .map(
-                (item) =>
-                  `<div class="list-item">
-                    <div class="list-item__url">${escapeHtml(item.url)}</div>
-                    ${
-                      item.tags.length
-                        ? `<div class="list-item__tags">${escapeHtml(item.tags.join(' '))}</div>`
-                        : ''
-                    }
+                (item, index) =>
+                  `<div class="list-item${index === 0 && data.job.active ? ' list-item--next' : ''}">
+                    <div class="list-item__row">
+                      <span class="list-item__index">${index + 1}</span>
+                      <div class="list-item__content">
+                        <div class="list-item__page">${escapeHtml(pageLabel(item.pageKey || 'default'))}</div>
+                        <div class="list-item__url">${escapeHtml(item.url)}</div>
+                        ${
+                          item.tags.length
+                            ? `<div class="list-item__tags">${escapeHtml(item.tags.join(' '))}</div>`
+                            : ''
+                        }
+                      </div>
+                    </div>
                   </div>`
               )
               .join('')
-          : '<div class="list-item list-item--empty">No pending items</div>';
+          : '<div class="list-item list-item--empty">No videos waiting</div>';
 
-        logsList.innerHTML = data.logs.length
-          ? data.logs
+        logsList.innerHTML = data.activity.length
+          ? data.activity
               .map(
-                (line) =>
-                  `<div class="log-entry ${logClass(line)}"><span class="log-entry__text">${escapeHtml(line)}</span></div>`
+                (entry) =>
+                  `<div class="activity-item">
+                    <div class="activity-item__head">
+                      <span class="badge ${badgeClass(entry.type)}">${badgeLabel(entry.type)}</span>
+                      ${entry.time ? `<span class="activity-item__time">${escapeHtml(entry.time)}</span>` : ''}
+                    </div>
+                    ${entry.url ? `<div class="activity-item__url">${escapeHtml(shortUrl(entry.url))}</div>` : ''}
+                    <div class="activity-item__message">${escapeHtml(entry.message || '')}</div>
+                  </div>`
               )
               .join('')
           : '<div class="list-item list-item--empty">No activity yet</div>';
+
+        schedulePoll(data.job.active);
       }
 
       document.getElementById('addBtn').addEventListener('click', async () => {
-        const links = document.getElementById('linksInput').value.trim();
-        if (!links) {
+        const urls = document.getElementById('urlsInput').value.trim();
+        const tags = document.getElementById('tagsInput').value.trim();
+        const page = pageSelect.value;
+        const selectedPage = pages.find((entry) => entry.key === page);
+
+        if (!urls) {
           setMessage('Add at least one TikTok URL.', 'error');
           return;
         }
 
-        const result = await api('/api/queue/add', { method: 'POST', body: { links } });
-        if (result.ok) {
-          setMessage(`Added ${result.added || 0} link(s) to the queue.`, 'success');
-          document.getElementById('linksInput').value = '';
-          await loadStatus();
-        } else {
-          setMessage(result.error || 'Failed to add links.', 'error');
+        if (!selectedPage) {
+          setMessage('Select a Facebook Page first.', 'error');
+          return;
+        }
+
+        document.getElementById('addBtn').disabled = true;
+        setMessage('Adding to queue…', 'info');
+
+        try {
+          const result = await api('/api/queue/add', { method: 'POST', body: { urls, tags, page } });
+          if (result.ok) {
+            setMessage(
+              result.added
+                ? `Added ${result.added} link(s) to ${selectedPage.name}. Processing started.`
+                : 'No new links were added.',
+              result.added ? 'success' : 'info'
+            );
+            document.getElementById('urlsInput').value = '';
+            document.getElementById('tagsInput').value = '';
+            await loadStatus();
+          } else {
+            setMessage(result.error || 'Failed to add links.', 'error');
+          }
+        } finally {
+          document.getElementById('addBtn').disabled = false;
         }
       });
 
       document.getElementById('runBtn').addEventListener('click', async () => {
+        document.getElementById('runBtn').disabled = true;
         setMessage('Starting manual check…', 'info');
-        const result = await api('/api/queue/process', { method: 'POST' });
-        if (result.ok) {
-          setMessage('Check started. Activity will appear below.', 'success');
-          await loadStatus();
-        } else {
-          setMessage(result.error || 'Manual check failed.', 'error');
+
+        try {
+          const result = await api('/api/queue/process', { method: 'POST' });
+          if (result.ok) {
+            setMessage('Check started. Watch the status panel above.', 'success');
+            await loadStatus();
+          } else {
+            setMessage(result.error || 'Manual check failed.', 'error');
+          }
+        } finally {
+          document.getElementById('runBtn').disabled = false;
         }
       });
 
@@ -179,7 +428,6 @@
       });
 
       loadStatus();
-      setInterval(loadStatus, 10000);
     </script>
   </body>
 </html>

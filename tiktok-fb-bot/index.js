@@ -4,44 +4,44 @@ const queue = require('./queue');
 const { downloadVideo, deleteArtifacts } = require('./downloader');
 const { uploadToFacebook } = require('./uploader');
 const logger = require('./logger');
+const status = require('./status');
+const { getPage, validatePages, getPageSummaries } = require('./pages');
 
-// Load environment variables
-const FB_PAGE_ID = process.env.FB_PAGE_ID;
-const FB_PAGE_ACCESS_TOKEN = process.env.FB_PAGE_ACCESS_TOKEN;
 const CRON_SCHEDULE = process.env.CRON_SCHEDULE || '0 * * * *';
 
-/**
- * Validate environment setup on startup
- */
 function validateEnvironment() {
   console.log('\n=== TikTok → Facebook Bot Starting ===\n');
 
-  if (!FB_PAGE_ID || FB_PAGE_ID === 'your_page_id_here') {
-    console.error('❌ Error: FB_PAGE_ID not configured in .env');
-    process.exit(1);
-  }
-
-  if (!FB_PAGE_ACCESS_TOKEN || FB_PAGE_ACCESS_TOKEN === 'your_long_lived_page_token_here') {
-    console.error('❌ Error: FB_PAGE_ACCESS_TOKEN not configured in .env');
+  let pages;
+  try {
+    pages = validatePages();
+  } catch (error) {
+    console.error(`❌ Error: ${error.message}`);
     process.exit(1);
   }
 
   console.log('✓ Environment validated');
-  console.log(`✓ Facebook Page ID: ${FB_PAGE_ID}`);
+  for (const page of pages) {
+    console.log(`✓ Facebook Page [${page.key}]: ${page.name} (${page.id})`);
+  }
   console.log(`✓ Cron Schedule: ${CRON_SCHEDULE}`);
   console.log('✓ Bot ready\n');
 
-  logger.logInfo('Bot started');
+  logger.logInfo(`Bot started with ${pages.length} Facebook page(s)`);
 }
 
 /**
  * Main processing function - runs on each cron tick
  */
 async function processQueue() {
+  if (status.isProcessing()) {
+    console.log('Already processing a video, skipping this tick.');
+    return;
+  }
+
   console.log('\n--- Cron tick started ---');
 
   try {
-    // 1. Get next URL from queue (now returns { url, tags })
     const item = queue.getNextUrl();
 
     if (!item) {
@@ -52,25 +52,29 @@ async function processQueue() {
 
     const tiktokUrl = item.url;
     const tags = item.tags || [];
+    const pageKey = item.pageKey || 'default';
+    const page = getPage(pageKey);
 
     console.log(`Processing: ${tiktokUrl}`);
+    console.log(`Target page: ${page.name} [${page.key}]`);
     if (tags.length > 0) {
       console.log(`Tags: ${tags.join(' ')}`);
     }
 
+    status.beginJob(tiktokUrl, tags, page.name);
     let downloadResult = null;
 
     try {
-      // 2. Download video
       console.log('Step 1/4: Downloading video...');
+      status.setPhase('downloading', 'Downloading video from TikTok…');
       downloadResult = await downloadVideo(tiktokUrl);
 
-      // 3. Upload to Facebook
       console.log('Step 2/4: Uploading to Facebook...');
+      status.setPhase('uploading', `Uploading to ${page.name}…`);
       const fbVideoId = await uploadToFacebook(
         downloadResult.videoPath,
-        FB_PAGE_ID,
-        FB_PAGE_ACCESS_TOKEN,
+        page.id,
+        page.token,
         {
           title: downloadResult.title,
           description: downloadResult.description,
@@ -79,36 +83,42 @@ async function processQueue() {
         tags
       );
 
-      // 4. Delete video after successful upload
       console.log('Step 3/4: Cleaning up downloaded files...');
+      status.setPhase('cleaning', 'Removing temporary files…');
       deleteArtifacts(downloadResult);
       downloadResult = null;
 
-      // 5. Log success
       console.log('Step 4/4: Logging success...');
-      logger.logSuccess(tiktokUrl, fbVideoId);
-
-      // 6. Mark as done
+      logger.logSuccess(tiktokUrl, fbVideoId, page.name);
       queue.markAsDone(tiktokUrl);
+
+      status.finishJob({
+        type: 'success',
+        url: tiktokUrl,
+        message: `Posted to ${page.name} · ID ${fbVideoId}`,
+      });
 
       console.log('✓ Processing completed successfully\n');
     } catch (error) {
-      // Log failure but continue bot operation
       const errorMsg = error.message || String(error);
       console.error(`✗ Processing failed: ${errorMsg}`);
       logger.logFailure(tiktokUrl, errorMsg);
+      queue.markAsDone(tiktokUrl, 'failed');
 
-      // Still mark as done so we don't retry forever
-      queue.markAsDone(tiktokUrl, "failed");
-
-      // Clean up temp files on failure too
       if (downloadResult) {
         deleteArtifacts(downloadResult);
       }
+
+      status.finishJob({
+        type: 'failed',
+        url: tiktokUrl,
+        message: errorMsg,
+      });
     }
   } catch (error) {
     console.error('Unexpected error in processQueue:', error);
     logger.logInfo(`Unexpected error: ${error.message}`);
+    status.abortJob();
   }
 }
 
@@ -158,4 +168,5 @@ module.exports = {
   processQueue,
   startScheduler,
   validateEnvironment,
+  getPageSummaries,
 };

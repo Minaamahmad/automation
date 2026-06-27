@@ -1,10 +1,10 @@
-const { exec } = require('child_process');
+const { execFile } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const util = require('util');
 
-const execPromise = util.promisify(exec);
+const execFilePromise = util.promisify(execFile);
 const DOWNLOADS_DIR =
   process.env.DOWNLOADS_DIR ||
   (process.platform === 'win32'
@@ -13,28 +13,56 @@ const DOWNLOADS_DIR =
 const MAX_DOWNLOAD_ATTEMPTS = 3;
 
 function resolveYtDlpPath() {
-  const candidates = [
-    process.env.YT_DLP_PATH,
-    'C:\\Users\\minaa\\AppData\\Local\\Python\\pythoncore-3.14-64\\Scripts\\yt-dlp.exe',
-    'C:\\Users\\minaa\\AppData\\Local\\Programs\\Python\\Python314\\Scripts\\yt-dlp.exe',
-    'C:\\Users\\minaa\\AppData\\Roaming\\Python\\Python314\\Scripts\\yt-dlp.exe',
-    'yt-dlp',
-    'yt-dlp.exe',
-  ];
+  const candidates = [process.env.YT_DLP_PATH];
 
   for (const candidate of candidates) {
     if (!candidate) continue;
-    if (fs.existsSync(candidate)) {
-      return candidate;
+    try {
+      if (!fs.existsSync(candidate)) continue;
+      const stat = fs.statSync(candidate);
+      if (stat.isFile()) return candidate;
+    } catch (e) {
+      // ignore and try next
     }
   }
 
   return 'yt-dlp';
 }
 
-/**
- * Ensure downloads directory exists
- */
+function normalizeImpersonateTarget(target) {
+  const trimmed = String(target || '').trim();
+  if (!trimmed) return null;
+
+  if (/^(Chrome|Edge|Firefox|Safari|Tor)-/i.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Common typo: "131:Android-14" → "Chrome-131:Android-14"
+  if (/^\d+:/.test(trimmed)) {
+    return `Chrome-${trimmed}`;
+  }
+
+  console.warn(`Ignoring invalid YT_DLP_IMPERSONATE value: ${trimmed}`);
+  return null;
+}
+
+function getImpersonateTargets() {
+  const defaults =
+    process.platform === 'win32'
+      ? ['Chrome-146:Macos-26', 'Chrome-131:Android-14', 'Edge-101']
+      : ['Chrome-146:Macos-26', 'Chrome-131:Android-14', 'Chrome-133:Macos-15'];
+
+  const envTarget = normalizeImpersonateTarget(process.env.YT_DLP_IMPERSONATE);
+  if (envTarget) {
+    return [
+      envTarget,
+      ...defaults.filter((target) => target.toLowerCase() !== envTarget.toLowerCase()),
+    ];
+  }
+
+  return defaults;
+}
+
 function ensureDownloadsDir() {
   if (!fs.existsSync(DOWNLOADS_DIR)) {
     fs.mkdirSync(DOWNLOADS_DIR, { recursive: true });
@@ -50,15 +78,12 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/**
- * Remove stale partial/final files for a video before retrying.
- */
 function cleanupVideoArtifacts(videoId) {
   if (!videoId || !fs.existsSync(DOWNLOADS_DIR)) {
     return;
   }
 
-  const removableExtensions = ['.part', '.mp4', '.jpg', '.jpeg', '.webp', '.info.json'];
+  const removableExtensions = ['.part', '.mp4', '.jpg', '.jpeg', '.webp', '.image', '.info.json'];
 
   for (const file of fs.readdirSync(DOWNLOADS_DIR)) {
     if (!file.startsWith(videoId)) {
@@ -116,7 +141,7 @@ function findThumbnailPath(videoId) {
     return null;
   }
 
-  const candidates = ['.jpg', '.jpeg', '.webp', '.png'];
+  const candidates = ['.jpg', '.jpeg', '.webp', '.png', '.image'];
   for (const ext of candidates) {
     const thumbPath = path.join(DOWNLOADS_DIR, `${videoId}${ext}`);
     if (fs.existsSync(thumbPath)) {
@@ -172,6 +197,58 @@ function isFileLockError(errorMsg) {
   );
 }
 
+function isImpersonateError(errorMsg) {
+  return (
+    errorMsg.includes('Impersonate target') &&
+    errorMsg.includes('not available')
+  );
+}
+
+function isExtractorError(errorMsg) {
+  return (
+    errorMsg.includes('Unable to extract') ||
+    errorMsg.includes('ExtractorError') ||
+    errorMsg.includes('Unexpected response')
+  );
+}
+
+function buildYtDlpCommand(ytDlpPath, args) {
+  let execCmd = ytDlpPath;
+  let finalArgs = args;
+
+  try {
+    const stat = fs.existsSync(ytDlpPath) && fs.statSync(ytDlpPath);
+    const usePythonModule =
+      !stat || !stat.isFile() || ytDlpPath === 'yt-dlp' || ytDlpPath === 'yt-dlp.exe';
+
+    if (usePythonModule) {
+      execCmd = process.env.PYTHON_EXEC || 'python';
+      finalArgs = ['-m', 'yt_dlp', ...args];
+    }
+  } catch (e) {
+    execCmd = process.env.PYTHON_EXEC || 'python';
+    finalArgs = ['-m', 'yt_dlp', ...args];
+  }
+
+  return { execCmd, args: finalArgs };
+}
+
+function buildYtDlpArgs(tiktokUrl, impersonateTarget) {
+  const outputTemplate = path.join(DOWNLOADS_DIR, '%(id)s.%(ext)s');
+  const args = [];
+
+  if (process.platform === 'win32') {
+    args.push('--no-part', '--retries', '5', '--fragment-retries', '5');
+  }
+
+  args.push('--impersonate', impersonateTarget);
+  args.push('--write-info-json', '--write-thumbnail');
+  args.push('-o', outputTemplate);
+  args.push(tiktokUrl);
+
+  return args;
+}
+
 /**
  * Download TikTok video without watermark using yt-dlp
  * Returns metadata object on success
@@ -179,6 +256,8 @@ function isFileLockError(errorMsg) {
  */
 async function downloadVideo(tiktokUrl, attempt = 1) {
   const videoId = extractVideoId(tiktokUrl);
+  const impersonateTargets = getImpersonateTargets();
+  const impersonateTarget = impersonateTargets[(attempt - 1) % impersonateTargets.length];
 
   try {
     ensureDownloadsDir();
@@ -188,19 +267,20 @@ async function downloadVideo(tiktokUrl, attempt = 1) {
     if (attempt > 1) {
       console.log(`Download retry ${attempt}/${MAX_DOWNLOAD_ATTEMPTS}`);
     }
+    console.log(`Using yt-dlp impersonate target: ${impersonateTarget}`);
 
-    const outputTemplate = path.join(DOWNLOADS_DIR, '%(id)s.%(ext)s');
     const ytDlpPath = resolveYtDlpPath();
-    const impersonateTarget = process.env.YT_DLP_IMPERSONATE || 'Chrome-124';
-    const windowsFlags =
-      process.platform === 'win32' ? '--no-part --retries 5 --fragment-retries 5 ' : '';
-    const command = `"${ytDlpPath}" ${windowsFlags}--impersonate "${impersonateTarget}" -f "download_addr-2/best" --write-info-json --write-thumbnail --convert-thumbnails jpg -o "${outputTemplate}" "${tiktokUrl}"`;
+    const args = buildYtDlpArgs(tiktokUrl, impersonateTarget);
+    const { execCmd, args: finalArgs } = buildYtDlpCommand(ytDlpPath, args);
 
-    const { stdout } = await execPromise(command, {
+    const { stdout, stderr } = await execFilePromise(execCmd, finalArgs, {
+      cwd: DOWNLOADS_DIR,
       timeout: 300000,
+      encoding: 'utf8',
     });
 
-    console.log('Download output:', stdout);
+    if (stdout) console.log('Download stdout:', stdout);
+    if (stderr) console.log('Download stderr:', stderr);
 
     const downloadedPath = findDownloadedFile(videoId);
     if (!downloadedPath) {
@@ -220,17 +300,29 @@ async function downloadVideo(tiktokUrl, attempt = 1) {
   } catch (error) {
     const errorMsg = error.stderr || error.message || String(error);
 
-    if (isFileLockError(errorMsg) && attempt < MAX_DOWNLOAD_ATTEMPTS) {
-      console.warn(`File lock during download, retrying in 2s (${attempt}/${MAX_DOWNLOAD_ATTEMPTS})...`);
+    if (
+      (isFileLockError(errorMsg) ||
+        isExtractorError(errorMsg) ||
+        isImpersonateError(errorMsg)) &&
+      attempt < MAX_DOWNLOAD_ATTEMPTS
+    ) {
+      const reason = isFileLockError(errorMsg)
+        ? 'file lock'
+        : isImpersonateError(errorMsg)
+          ? 'impersonate target error'
+          : 'extractor error';
+      console.warn(`${reason} during download, retrying in 2s (${attempt}/${MAX_DOWNLOAD_ATTEMPTS})...`);
       cleanupVideoArtifacts(videoId);
       await sleep(2000);
       return downloadVideo(tiktokUrl, attempt + 1);
     }
 
-    if (errorMsg.includes('not found') || errorMsg.includes('Cannot find module') || errorMsg.includes('No such file or directory')) {
-      throw new Error(
-        'yt-dlp executable not found. Verify installation: pip install yt-dlp'
-      );
+    if (
+      errorMsg.includes('not found') ||
+      errorMsg.includes('Cannot find module') ||
+      errorMsg.includes('No such file or directory')
+    ) {
+      throw new Error('yt-dlp executable not found. Verify installation: pip install yt-dlp');
     }
 
     if (errorMsg.includes('Private video') || errorMsg.includes('Not available')) {
