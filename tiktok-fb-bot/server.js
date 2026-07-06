@@ -108,14 +108,14 @@ app.post('/api/auth/logout', (req, res) => {
 
 app.use('/api', requireAuth);
 
-app.get('/api/status', (req, res) => {
-  const pending = queue.getPendingUrls();
+app.get('/api/status', async (req, res) => {
+  const pending = await queue.getPendingUrls();
   res.json({
     ok: true,
     schedule: process.env.CRON_SCHEDULE || '0 * * * *',
     pages: getPageSummaries(),
     pending,
-    pendingCount: pending.length,
+    pendingCount: Array.isArray(pending) ? pending.length : 0,
     job: status.getSnapshot(),
     activity: logger.getStructuredLogs(15),
   });
@@ -125,8 +125,13 @@ app.get('/api/pages', (req, res) => {
   res.json({ ok: true, pages: getPageSummaries() });
 });
 
-app.get('/api/queue', (req, res) => {
-  res.json({ ok: true, items: queue.getPendingUrls() });
+app.get('/api/queue', async (req, res) => {
+  try {
+    const items = await queue.getPendingUrls();
+    res.json({ ok: true, items });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message || String(err) });
+  }
 });
 
 app.post('/api/queue/add', async (req, res) => {
@@ -134,7 +139,7 @@ app.post('/api/queue/add', async (req, res) => {
     const urls = req.body.urls || req.body.links || '';
     const tags = req.body.tags || '';
     const page = req.body.page || 'default';
-    const result = queue.appendLinks(urls, tags, page);
+    const result = await queue.appendLinks(urls, tags, page);
 
     if (result.added > 0) {
       await processQueue();

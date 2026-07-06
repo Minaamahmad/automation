@@ -42,7 +42,7 @@ async function processQueue() {
   console.log('\n--- Cron tick started ---');
 
   try {
-    const item = queue.getNextUrl();
+    const item = await queue.getNextUrl();
 
     if (!item) {
       console.log('Queue is empty. Nothing to process.');
@@ -90,7 +90,7 @@ async function processQueue() {
 
       console.log('Step 4/4: Logging success...');
       logger.logSuccess(tiktokUrl, fbVideoId, page.name);
-      queue.markAsDone(tiktokUrl);
+      await queue.markAsDone(tiktokUrl);
 
       status.finishJob({
         type: 'success',
