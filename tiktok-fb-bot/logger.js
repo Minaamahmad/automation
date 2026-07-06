@@ -3,6 +3,17 @@ const path = require('path');
 
 const LOGS_FILE = path.join(__dirname, 'logs.txt');
 
+function emitStructured(level, data) {
+  try {
+    const obj = Object.assign({ level, time: new Date().toISOString() }, data);
+    // Print structured JSON to stdout for container-friendly logging
+    console.log(JSON.stringify(obj));
+  } catch (e) {
+    // fall back to simple console
+    console.log(level, data);
+  }
+}
+
 /**
  * Format current timestamp for logs
  */
@@ -20,7 +31,7 @@ function logSuccess(tiktokUrl, fbVideoId, pageName = null) {
 
   try {
     fs.appendFileSync(LOGS_FILE, entry, 'utf-8');
-    console.log('✓ Logged success:', entry.trim());
+    emitStructured('info', { event: 'success', url: tiktokUrl, fbVideoId, page: pageName || null });
   } catch (error) {
     console.error('Error writing to logs:', error);
   }
@@ -35,7 +46,7 @@ function logFailure(tiktokUrl, reason) {
 
   try {
     fs.appendFileSync(LOGS_FILE, entry, 'utf-8');
-    console.log('✗ Logged failure:', entry.trim());
+    emitStructured('error', { event: 'failure', url: tiktokUrl, reason });
   } catch (error) {
     console.error('Error writing to logs:', error);
   }
@@ -50,7 +61,7 @@ function logInfo(message) {
 
   try {
     fs.appendFileSync(LOGS_FILE, entry, 'utf-8');
-    console.log('ℹ', entry.trim());
+    emitStructured('info', { event: 'info', message });
   } catch (error) {
     console.error('Error writing to logs:', error);
   }

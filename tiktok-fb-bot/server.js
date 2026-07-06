@@ -8,27 +8,65 @@ const logger = require('./logger');
 const status = require('./status');
 const { validateEnvironment, startScheduler, processQueue } = require('./index');
 const { getPageSummaries } = require('./pages');
+const RedisStore = require('connect-redis').default;
+const { createClient } = require('redis');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const AUTH_USERNAME = (process.env.AUTH_USERNAME || 'admin').trim();
 const AUTH_PASSWORD = (process.env.AUTH_PASSWORD || 'password').trim();
 const SESSION_SECRET = (process.env.SESSION_SECRET || 'tiktok-fb-bot-session-secret').trim();
+const REDIS_URL = process.env.REDIS_URL || 'redis://localhost:6379';
+const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.NODE_ENV === 'production';
+const SESSION_COOKIE_SECURE = process.env.SESSION_COOKIE_SECURE === '1' || TRUST_PROXY;
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(
-  session({
+// If running behind a proxy / load balancer (Render, Heroku, nginx), enable trust proxy
+if (TRUST_PROXY) {
+  app.set('trust proxy', 1);
+}
+
+// Create Redis client and use Redis-backed session store for production / scaling
+let sessionMiddleware;
+try {
+  const redisClient = createClient({ url: REDIS_URL });
+  redisClient.on('error', (err) => {
+    console.warn('Redis client error:', err && err.message ? err.message : err);
+  });
+  // connect asynchronously but don't block startup indefinitely
+  redisClient.connect().catch((err) => console.warn('Redis connect failed:', err && err.message ? err.message : err));
+
+  const redisStore = new RedisStore({ client: redisClient });
+
+  sessionMiddleware = session({
+    store: redisStore,
     secret: SESSION_SECRET,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
       sameSite: 'lax',
+      secure: Boolean(SESSION_COOKIE_SECURE),
       maxAge: 1000 * 60 * 60 * 8,
     },
-  })
-);
+  });
+} catch (err) {
+  console.warn('Failed to initialize Redis session store, falling back to memory store:', err && err.message ? err.message : err);
+  sessionMiddleware = session({
+    secret: SESSION_SECRET,
+    resave: false,
+    saveUninitialized: false,
+    cookie: {
+      httpOnly: true,
+      sameSite: 'lax',
+      secure: Boolean(SESSION_COOKIE_SECURE),
+      maxAge: 1000 * 60 * 60 * 8,
+    },
+  });
+}
+
+app.use(sessionMiddleware);
 
 function requireAuth(req, res, next) {
   if (req.session && req.session.user === AUTH_USERNAME) {
@@ -118,7 +156,38 @@ app.post('/api/queue/process', async (req, res) => {
 });
 
 app.get('/api/logs', (req, res) => {
-  res.json({ ok: true, logs: logger.getLogs().slice(-50) });
+  // Return recent structured logs if possible
+  try {
+    res.json({ ok: true, logs: logger.getStructuredLogs(50) });
+  } catch (err) {
+    res.json({ ok: true, logs: logger.getLogs().slice(-50) });
+  }
+});
+
+// Health endpoint for readiness checks
+app.get('/api/health', (req, res) => {
+  const health = {
+    ok: true,
+    uptime: process.uptime(),
+    time: new Date().toISOString(),
+  };
+
+  // Redis health (if available)
+  try {
+    // If Redis client exists on session store, try to report connection status
+    const store = req.session?.store || null;
+    if (!store && sessionMiddleware && sessionMiddleware.store) {
+      // attempt to access underlying Redis client
+      const maybeStore = sessionMiddleware.store;
+      if (maybeStore && maybeStore.client && typeof maybeStore.client.isOpen !== 'undefined') {
+        health.redis = maybeStore.client.isOpen ? 'connected' : 'disconnected';
+      }
+    }
+  } catch (err) {
+    // ignore
+  }
+
+  res.status(200).json(health);
 });
 
 app.use(express.static(path.join(__dirname, 'public'), { index: false }));
