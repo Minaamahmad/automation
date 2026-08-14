@@ -14,6 +14,7 @@ RUN ln -sf /usr/bin/python3 /usr/bin/python
 # Install yt-dlp and curl_cffi system-wide
 # (--break-system-packages is needed on Debian 12+/Python 3.11+)
 RUN python3 -m pip install --no-cache-dir --break-system-packages --upgrade pip yt-dlp curl_cffi
+RUN python3 -m yt_dlp --list-impersonate-targets
 
 WORKDIR /app
 

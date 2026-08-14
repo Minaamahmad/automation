@@ -31,26 +31,12 @@ function resolveYtDlpPath() {
 
 function normalizeImpersonateTarget(target) {
   const trimmed = String(target || '').trim();
-  if (!trimmed) return null;
-
-  if (/^(Chrome|Edge|Firefox|Safari|Tor)-/i.test(trimmed)) {
-    return trimmed;
-  }
-
-  // Common typo: "131:Android-14" → "Chrome-131:Android-14"
-  if (/^\d+:/.test(trimmed)) {
-    return `Chrome-${trimmed}`;
-  }
-
-  console.warn(`Ignoring invalid YT_DLP_IMPERSONATE value: ${trimmed}`);
-  return null;
+  return trimmed || null;
 }
 
+js
 function getImpersonateTargets() {
-  const defaults =
-    process.platform === 'win32'
-      ? ['Chrome-146:Macos-26', 'Chrome-131:Android-14', 'Edge-101']
-      : ['Chrome-146:Macos-26', 'Chrome-131:Android-14', 'Chrome-133:Macos-15'];
+  const defaults = ['chrome124', 'chrome120', 'edge101', 'safari17_0'];
 
   const envTarget = normalizeImpersonateTarget(process.env.YT_DLP_IMPERSONATE);
   if (envTarget) {
