@@ -1,18 +1,13 @@
 services:
   - type: web
     name: tiktok-fb-bot
-    runtime: node
+    runtime: docker
     plan: starter
     rootDir: tiktok-fb-bot
-    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --upgrade yt-dlp curl_cffi && npm install
-    startCommand: npm start
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
     envVars:
-      - key: NODE_ENV
-        value: production
       - key: TRUST_PROXY
         value: "1"
       - key: SESSION_COOKIE_SECURE
         value: "1"
-      - key: PYTHON_EXEC
-        value: python3
-    healthCheckPath: /api/health
