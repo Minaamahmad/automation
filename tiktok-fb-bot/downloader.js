@@ -34,7 +34,6 @@ function normalizeImpersonateTarget(target) {
   return trimmed || null;
 }
 
-js
 function getImpersonateTargets() {
   const defaults = ['chrome124', 'chrome120', 'edge101', 'safari17_0'];
 
