@@ -3,6 +3,7 @@ services:
     name: tiktok-fb-bot
     runtime: node
     plan: starter
+    rootDir: tiktok-fb-bot
     buildCommand: npm install && pip install --upgrade yt-dlp curl_cffi
     startCommand: npm start
     envVars:
