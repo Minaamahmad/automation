@@ -4,7 +4,7 @@ services:
     runtime: node
     plan: starter
     rootDir: tiktok-fb-bot
-    buildCommand: npm install && pip install --upgrade yt-dlp curl_cffi
+    buildCommand: apt-get update && apt-get install -y python3 python3-pip && pip3 install --upgrade yt-dlp curl_cffi && npm install
     startCommand: npm start
     envVars:
       - key: NODE_ENV
@@ -13,4 +13,6 @@ services:
         value: "1"
       - key: SESSION_COOKIE_SECURE
         value: "1"
+      - key: PYTHON_EXEC
+        value: python3
     healthCheckPath: /api/health
