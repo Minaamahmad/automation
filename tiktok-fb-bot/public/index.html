@@ -200,7 +200,18 @@
           throw new Error('Unauthorized');
         }
 
-        return response.json();
+        let data;
+        try {
+          data = await response.json();
+        } catch {
+          throw new Error('Server returned an invalid response. Is the bot running?');
+        }
+
+        if (!response.ok) {
+          throw new Error(data.error || `Request failed (${response.status})`);
+        }
+
+        return data;
       }
 
       function setMessage(text, type = 'info') {
@@ -317,53 +328,57 @@
       }
 
       async function loadStatus() {
-        const data = await api('/api/status');
-        renderPageOptions(data.pages || []);
-        statSchedule.textContent = formatSchedule(data.schedule);
-        statPending.textContent = `${data.pendingCount} pending`;
-        queueCount.textContent = String(data.pendingCount);
-        renderJob(data.job, data.pendingCount);
+        try {
+          const data = await api('/api/status');
+          renderPageOptions(data.pages || []);
+          statSchedule.textContent = formatSchedule(data.schedule);
+          statPending.textContent = `${data.pendingCount} pending`;
+          queueCount.textContent = String(data.pendingCount);
+          renderJob(data.job, data.pendingCount);
 
-        const queueEl = document.getElementById('queueList');
-        queueEl.innerHTML = data.pending.length
-          ? data.pending
-              .map(
-                (item, index) =>
-                  `<div class="list-item${index === 0 && data.job.active ? ' list-item--next' : ''}">
-                    <div class="list-item__row">
-                      <span class="list-item__index">${index + 1}</span>
-                      <div class="list-item__content">
-                        <div class="list-item__page">${escapeHtml(pageLabel(item.pageKey || 'default'))}</div>
-                        <div class="list-item__url">${escapeHtml(item.url)}</div>
-                        ${
-                          item.tags.length
-                            ? `<div class="list-item__tags">${escapeHtml(item.tags.join(' '))}</div>`
-                            : ''
-                        }
+          const queueEl = document.getElementById('queueList');
+          queueEl.innerHTML = data.pending.length
+            ? data.pending
+                .map(
+                  (item, index) =>
+                    `<div class="list-item${index === 0 && data.job.active ? ' list-item--next' : ''}">
+                      <div class="list-item__row">
+                        <span class="list-item__index">${index + 1}</span>
+                        <div class="list-item__content">
+                          <div class="list-item__page">${escapeHtml(pageLabel(item.pageKey || 'default'))}</div>
+                          <div class="list-item__url">${escapeHtml(item.url)}</div>
+                          ${
+                            item.tags.length
+                              ? `<div class="list-item__tags">${escapeHtml(item.tags.join(' '))}</div>`
+                              : ''
+                          }
+                        </div>
                       </div>
-                    </div>
-                  </div>`
-              )
-              .join('')
-          : '<div class="list-item list-item--empty">No videos waiting</div>';
+                    </div>`
+                )
+                .join('')
+            : '<div class="list-item list-item--empty">No videos waiting</div>';
 
-        logsList.innerHTML = data.activity.length
-          ? data.activity
-              .map(
-                (entry) =>
-                  `<div class="activity-item">
-                    <div class="activity-item__head">
-                      <span class="badge ${badgeClass(entry.type)}">${badgeLabel(entry.type)}</span>
-                      ${entry.time ? `<span class="activity-item__time">${escapeHtml(entry.time)}</span>` : ''}
-                    </div>
-                    ${entry.url ? `<div class="activity-item__url">${escapeHtml(shortUrl(entry.url))}</div>` : ''}
-                    <div class="activity-item__message">${escapeHtml(entry.message || '')}</div>
-                  </div>`
-              )
-              .join('')
-          : '<div class="list-item list-item--empty">No activity yet</div>';
+          logsList.innerHTML = data.activity.length
+            ? data.activity
+                .map(
+                  (entry) =>
+                    `<div class="activity-item">
+                      <div class="activity-item__head">
+                        <span class="badge ${badgeClass(entry.type)}">${badgeLabel(entry.type)}</span>
+                        ${entry.time ? `<span class="activity-item__time">${escapeHtml(entry.time)}</span>` : ''}
+                      </div>
+                      ${entry.url ? `<div class="activity-item__url">${escapeHtml(shortUrl(entry.url))}</div>` : ''}
+                      <div class="activity-item__message">${escapeHtml(entry.message || '')}</div>
+                    </div>`
+                )
+                .join('')
+            : '<div class="list-item list-item--empty">No activity yet</div>';
 
-        schedulePoll(data.job.active);
+          schedulePoll(data.job.active);
+        } catch (error) {
+          setMessage(error.message || 'Could not load dashboard status.', 'error');
+        }
       }
 
       document.getElementById('addBtn').addEventListener('click', async () => {
@@ -391,7 +406,7 @@
             setMessage(
               result.added
                 ? `Added ${result.added} link(s) to ${selectedPage.name}. Processing started.`
-                : 'No new links were added.',
+                : 'No new links were added (may already be in queue).',
               result.added ? 'success' : 'info'
             );
             document.getElementById('urlsInput').value = '';
@@ -400,6 +415,8 @@
           } else {
             setMessage(result.error || 'Failed to add links.', 'error');
           }
+        } catch (error) {
+          setMessage(error.message || 'Failed to add links.', 'error');
         } finally {
           document.getElementById('addBtn').disabled = false;
         }
@@ -417,6 +434,8 @@
           } else {
             setMessage(result.error || 'Manual check failed.', 'error');
           }
+        } catch (error) {
+          setMessage(error.message || 'Manual check failed.', 'error');
         } finally {
           document.getElementById('runBtn').disabled = false;
         }

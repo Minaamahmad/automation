@@ -134,7 +134,7 @@ Then open:
 http://localhost:3000
 ```
 
-To run this on a real server (so it keeps working without your PC), deploy the project to Render / Railway / VPS and make sure `YT_DLP_PATH=yt-dlp` is available in the environment.
+To run this on a real server (so it keeps working without your PC), see [Deploy online](#deploy-online) below.
 
 The bot will:
 
@@ -189,6 +189,70 @@ The downloads folder should be created automatically. If not, create it manually
 ```bash
 mkdir downloads
 ```
+
+## Deploy online
+
+The app is a single Node.js web service (`npm start` → `server.js`). It uses **file-based queue** (`links.txt`) — no Redis required.
+
+### Option A: Render (recommended)
+
+1. Push this folder to a **GitHub** repository.
+2. Go to [render.com](https://render.com) → **New → Blueprint** (or Web Service).
+3. Connect the repo. Render reads [`render.yaml`](render.yaml) automatically, or set manually:
+   - **Build command:** `npm install && pip install --upgrade yt-dlp curl_cffi`
+   - **Start command:** `npm start`
+   - **Health check path:** `/api/health`
+4. Add environment variables in the Render dashboard (copy from your `.env`):
+   - `FB_PAGE_ID`, `FB_PAGE_ACCESS_TOKEN`, `FB_PAGE_KEY`, `FB_PAGE_NAME`
+   - Extra pages: `FB_PAGE_2_ID`, `FB_PAGE_2_TOKEN`, etc.
+   - `AUTH_USERNAME`, `AUTH_PASSWORD`, `SESSION_SECRET`
+   - `CRON_SCHEDULE`, `NODE_ENV=production`, `TRUST_PROXY=1`, `SESSION_COOKIE_SECURE=1`
+5. Deploy. Open your Render URL → sign in → add TikTok links from the dashboard.
+
+**Important on Render:**
+- Free/starter tiers may **sleep** when idle; upgrade for 24/7 cron.
+- Ephemeral disk: `links.txt` and `logs.txt` reset on redeploy unless you add a [persistent disk](https://render.com/docs/disks).
+- Python + `yt-dlp` must succeed in the build step (included in `render.yaml`).
+
+### Option B: Railway
+
+1. Push to GitHub, then [railway.app](https://railway.app) → **New Project → Deploy from GitHub**.
+2. Set **Start command:** `npm start`
+3. Add the same env vars as above.
+4. Railway sets `PORT` automatically.
+
+### Option C: VPS (Ubuntu)
+
+```bash
+# On the server
+sudo apt update && sudo apt install -y nodejs npm python3 python3-pip ffmpeg
+pip3 install yt-dlp curl_cffi
+git clone <your-repo-url> tiktok-fb-bot && cd tiktok-fb-bot
+npm install
+cp .env.example .env   # then edit .env with your secrets
+npm start
+```
+
+Keep it running with **pm2**:
+
+```bash
+npm install -g pm2
+pm2 start server.js --name tiktok-fb-bot
+pm2 save && pm2 startup
+```
+
+Put **nginx** or **Caddy** in front for HTTPS and set `TRUST_PROXY=1`.
+
+### Deployment checklist
+
+| Item | Notes |
+|------|--------|
+| Facebook tokens | Long-lived **Page** tokens with `pages_manage_posts` + `publish_video` |
+| Dashboard login | Set strong `AUTH_USERNAME` / `AUTH_PASSWORD` |
+| `SESSION_SECRET` | Random string, required in production |
+| `yt-dlp` | Must be on PATH or set `YT_DLP_PATH` |
+| `curl_cffi` | Required for TikTok impersonation (`pip install curl_cffi`) |
+| HTTPS | Set `TRUST_PROXY=1` and `SESSION_COOKIE_SECURE=1` behind a reverse proxy |
 
 ## Facebook Upload Details
 

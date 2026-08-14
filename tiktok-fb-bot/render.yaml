@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: tiktok-fb-bot
+    runtime: node
+    plan: starter
+    buildCommand: npm install && pip install --upgrade yt-dlp curl_cffi
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: TRUST_PROXY
+        value: "1"
+      - key: SESSION_COOKIE_SECURE
+        value: "1"
+    healthCheckPath: /api/health

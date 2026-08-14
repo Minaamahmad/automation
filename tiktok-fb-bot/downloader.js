@@ -212,6 +212,33 @@ function isExtractorError(errorMsg) {
   );
 }
 
+function resolvePythonExecutable() {
+  const configured = String(process.env.PYTHON_EXEC || '').trim();
+  if (configured) {
+    try {
+      if (fs.existsSync(configured) && fs.statSync(configured).isFile()) {
+        return configured;
+      }
+    } catch (error) {
+      // ignore and fall back
+    }
+  }
+
+  const candidates = ['python', 'python3', 'py'];
+  for (const candidate of candidates) {
+    try {
+      const resolved = require('child_process').execFileSync(candidate, ['--version'], { stdio: 'ignore' });
+      if (resolved !== undefined) {
+        return candidate;
+      }
+    } catch (error) {
+      // try next candidate
+    }
+  }
+
+  return 'python';
+}
+
 function buildYtDlpCommand(ytDlpPath, args) {
   let execCmd = ytDlpPath;
   let finalArgs = args;
@@ -222,11 +249,11 @@ function buildYtDlpCommand(ytDlpPath, args) {
       !stat || !stat.isFile() || ytDlpPath === 'yt-dlp' || ytDlpPath === 'yt-dlp.exe';
 
     if (usePythonModule) {
-      execCmd = process.env.PYTHON_EXEC || 'python';
+      execCmd = resolvePythonExecutable();
       finalArgs = ['-m', 'yt_dlp', ...args];
     }
   } catch (e) {
-    execCmd = process.env.PYTHON_EXEC || 'python';
+    execCmd = resolvePythonExecutable();
     finalArgs = ['-m', 'yt_dlp', ...args];
   }
 
@@ -372,4 +399,6 @@ module.exports = {
   downloadVideo,
   deleteArtifacts,
   deleteVideo,
+  buildYtDlpCommand,
+  resolvePythonExecutable,
 };

@@ -38,3 +38,8 @@
 #done @1 https://www.tiktok.com/@ahsueditz/video/7646851299970993416?q=cricket%20&t=1782399265140
 #done @2 https://www.tiktok.com/@ahsueditz/video/7646851299970993416?q=cricket%20&t=1782399265140
 #done @2 https://www.tiktok.com/@ahsueditz/video/7646851299970993416?q=cricket%20&t=1782399265140
+#done @default https://www.tiktok.com/@user/video/1 #tag1
+#done @default https://www.tiktok.com/@user/video/2 #tag1
+#done @1 https://www.tiktok.com/@test/video/111222333 #funny
+#done @default https://www.tiktok.com/@test/video/1234567890 #funny
+#done @default https://www.tiktok.com/@test/video/8888888888 #test

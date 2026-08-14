@@ -22,7 +22,7 @@ function validateEnvironment() {
 
   console.log('✓ Environment validated');
   for (const page of pages) {
-    console.log(`✓ Facebook Page [${page.key}]: ${page.name} (${page.id})`);
+    console.log(`✓ Facebook Pages are available`);
   }
   console.log(`✓ Cron Schedule: ${CRON_SCHEDULE}`);
   console.log('✓ Bot ready\n');
@@ -42,7 +42,7 @@ async function processQueue() {
   console.log('\n--- Cron tick started ---');
 
   try {
-    const item = await queue.getNextUrl();
+    const item = queue.getNextUrl();
 
     if (!item) {
       console.log('Queue is empty. Nothing to process.');
@@ -103,7 +103,7 @@ async function processQueue() {
       const errorMsg = error.message || String(error);
       console.error(`✗ Processing failed: ${errorMsg}`);
       logger.logFailure(tiktokUrl, errorMsg);
-      queue.markAsDone(tiktokUrl, 'failed');
+      await queue.markAsDone(tiktokUrl);
 
       if (downloadResult) {
         deleteArtifacts(downloadResult);
