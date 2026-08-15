@@ -12,6 +12,10 @@ const DOWNLOADS_DIR =
     : path.join(__dirname, 'downloads'));
 const MAX_DOWNLOAD_ATTEMPTS = 3;
 
+// Toggle: set USE_IMPERSONATE=true in env to re-enable --impersonate.
+// Defaults to OFF while we test cookie-based auth alone.
+const USE_IMPERSONATE = String(process.env.USE_IMPERSONATE || '').toLowerCase() === 'true';
+
 function resolveYtDlpPath() {
   const candidates = [process.env.YT_DLP_PATH];
 
@@ -27,6 +31,18 @@ function resolveYtDlpPath() {
   }
 
   return 'yt-dlp';
+}
+
+function resolveCookiesPath() {
+  const configured = process.env.YT_DLP_COOKIES_PATH || '/etc/secrets/cookies.txt';
+  try {
+    if (fs.existsSync(configured) && fs.statSync(configured).isFile()) {
+      return configured;
+    }
+  } catch (e) {
+    // ignore
+  }
+  return null;
 }
 
 function normalizeImpersonateTarget(target) {
@@ -197,6 +213,15 @@ function isExtractorError(errorMsg) {
   );
 }
 
+function isAuthError(errorMsg) {
+  return (
+    errorMsg.includes('cookies') ||
+    errorMsg.includes('Login required') ||
+    errorMsg.includes('This video is unavailable') ||
+    errorMsg.includes('Unable to log in')
+  );
+}
+
 function resolvePythonExecutable() {
   const configured = String(process.env.PYTHON_EXEC || '').trim();
   if (configured) {
@@ -253,7 +278,17 @@ function buildYtDlpArgs(tiktokUrl, impersonateTarget) {
     args.push('--no-part', '--retries', '5', '--fragment-retries', '5');
   }
 
-  args.push('--impersonate', impersonateTarget);
+  const cookiesPath = resolveCookiesPath();
+  if (cookiesPath) {
+    args.push('--cookies', cookiesPath);
+  } else {
+    console.warn('No cookies file found at', process.env.YT_DLP_COOKIES_PATH || '/etc/secrets/cookies.txt');
+  }
+
+  if (USE_IMPERSONATE && impersonateTarget) {
+    args.push('--impersonate', impersonateTarget);
+  }
+
   args.push('--write-info-json', '--write-thumbnail');
   args.push('-o', outputTemplate);
   args.push(tiktokUrl);
@@ -279,7 +314,9 @@ async function downloadVideo(tiktokUrl, attempt = 1) {
     if (attempt > 1) {
       console.log(`Download retry ${attempt}/${MAX_DOWNLOAD_ATTEMPTS}`);
     }
-    console.log(`Using yt-dlp impersonate target: ${impersonateTarget}`);
+    if (USE_IMPERSONATE) {
+      console.log(`Using yt-dlp impersonate target: ${impersonateTarget}`);
+    }
 
     const ytDlpPath = resolveYtDlpPath();
     const args = buildYtDlpArgs(tiktokUrl, impersonateTarget);
@@ -327,6 +364,12 @@ async function downloadVideo(tiktokUrl, attempt = 1) {
       cleanupVideoArtifacts(videoId);
       await sleep(2000);
       return downloadVideo(tiktokUrl, attempt + 1);
+    }
+
+    if (isAuthError(errorMsg)) {
+      throw new Error(
+        `Download failed (likely expired/missing cookies): ${errorMsg}. Re-export cookies.txt and update the Render secret file.`
+      );
     }
 
     if (
