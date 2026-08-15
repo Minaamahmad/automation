@@ -34,15 +34,26 @@ function resolveYtDlpPath() {
 }
 
 function resolveCookiesPath() {
-  const configured = process.env.YT_DLP_COOKIES_PATH || '/etc/secrets/cookies.txt';
+  const sourcePath = process.env.YT_DLP_COOKIES_PATH || '/etc/secrets/cookies.txt';
+
   try {
-    if (fs.existsSync(configured) && fs.statSync(configured).isFile()) {
-      return configured;
+    if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
+      return null;
     }
   } catch (e) {
-    // ignore
+    return null;
   }
-  return null;
+
+  // Render Secret Files are mounted read-only, but yt-dlp needs to write
+  // updated session cookies back after each run. Copy to a writable path.
+  const writablePath = path.join(os.tmpdir(), 'yt-dlp-cookies.txt');
+  try {
+    fs.copyFileSync(sourcePath, writablePath);
+    return writablePath;
+  } catch (e) {
+    console.warn(`Could not copy cookies to writable path: ${e.message}`);
+    return sourcePath; // fall back to read-only source; may still work read-only
+  }
 }
 
 function normalizeImpersonateTarget(target) {
